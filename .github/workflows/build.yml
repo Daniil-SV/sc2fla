@@ -1,0 +1,222 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ZSTD_VERSION: v1.5.7
+  ZSTD_OSX_ARCHITECTURES: "x86_64;x86_64h;arm64"
+  ZSTD_OSX_DEPLOYMENT_TARGET: "15.0"
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+jobs:
+  # ---------------------------------------------------------------- Windows
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install zstd (vcpkg, static)
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install zstd:x64-windows-static
+
+      - name: Cache CMake FetchContent dependencies
+        uses: actions/cache@v6
+        with:
+          path: build/_deps
+          key: fetchcontent-windows-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path build/sc2fla.exe, README.md -DestinationPath dist/sc2fla-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sc2fla-windows-x64
+          path: dist/sc2fla-windows-x64.zip
+          if-no-files-found: error
+
+  # ----------------------------------------------------------------- Ubuntu
+  ubuntu:
+    name: Ubuntu
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build python3 libzstd-dev zlib1g-dev git
+
+      - name: Show toolchain versions
+        run: |
+          g++ --version
+          cmake --version
+          ninja --version
+          python3 --version
+
+      - name: Cache CMake FetchContent dependencies
+        uses: actions/cache@v6
+        with:
+          path: build/_deps
+          key: fetchcontent-ubuntu-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          tar -czf dist/sc2fla-linux-x64.tar.gz -C build sc2fla
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sc2fla-linux-x64
+          path: dist/sc2fla-linux-x64.tar.gz
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------ macOS
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install cmake, ninja, python
+        run: brew install cmake ninja python
+
+      - name: Show toolchain versions
+        run: |
+          clang --version
+          cmake --version
+          ninja --version
+          python3 --version
+
+      - name: Cache zstd install
+        id: zstd-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/zstd-install
+          key: zstd-${{ env.ZSTD_VERSION }}-${{ env.ZSTD_OSX_ARCHITECTURES }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build and install zstd
+        if: steps.zstd-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$ZSTD_VERSION" https://github.com/facebook/zstd.git "$RUNNER_TEMP/zstd-src"
+          cmake -S "$RUNNER_TEMP/zstd-src/build/cmake" -B "$RUNNER_TEMP/zstd-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DZSTD_BUILD_SHARED=OFF -DZSTD_BUILD_PROGRAMS=OFF \
+            -DZSTD_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DCMAKE_OSX_ARCHITECTURES="$ZSTD_OSX_ARCHITECTURES" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$ZSTD_OSX_DEPLOYMENT_TARGET" \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/zstd-install"
+          cmake --build "$RUNNER_TEMP/zstd-build" --target install
+
+      - name: Cache CMake FetchContent dependencies
+        uses: actions/cache@v6
+        with:
+          path: build/_deps
+          key: fetchcontent-macos-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/zstd-install"
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          tar -czf "dist/sc2fla-macos-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}.tar.gz" -C build sc2fla
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sc2fla-macos-${{ runner.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------- Release
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, ubuntu, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Download build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir artifacts
+          find artifacts -type f
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir release
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release/ \;
+          (cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          gh release create "$TAG" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --generate-notes \
+            --verify-tag
