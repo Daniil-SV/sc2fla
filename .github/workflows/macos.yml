@@ -1,0 +1,78 @@
+name: Build
+
+on: [push, pull_request, workflow_dispatch]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ZSTD_VERSION: v1.5.7
+  ZSTD_OSX_ARCHITECTURES: "x86_64;x86_64h;arm64"
+  ZSTD_OSX_DEPLOYMENT_TARGET: "15.0"
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install cmake, ninja, python
+        run: brew install cmake ninja python
+
+      - name: Show toolchain versions
+        run: |
+          clang --version
+          cmake --version
+          ninja --version
+          python3 --version
+
+      - name: Cache zstd install
+        id: zstd-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/zstd-install
+          key: zstd-${{ env.ZSTD_VERSION }}-${{ env.ZSTD_OSX_ARCHITECTURES }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build and install zstd
+        if: steps.zstd-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$ZSTD_VERSION" https://github.com/facebook/zstd.git "$RUNNER_TEMP/zstd-src"
+          cmake -S "$RUNNER_TEMP/zstd-src/build/cmake" -B "$RUNNER_TEMP/zstd-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DZSTD_BUILD_SHARED=OFF -DZSTD_BUILD_PROGRAMS=OFF \
+            -DZSTD_BUILD_TESTS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DCMAKE_OSX_ARCHITECTURES="$ZSTD_OSX_ARCHITECTURES" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$ZSTD_OSX_DEPLOYMENT_TARGET" \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/zstd-install"
+          cmake --build "$RUNNER_TEMP/zstd-build" --target install
+
+      - name: Cache CMake FetchContent dependencies
+        uses: actions/cache@v6
+        with:
+          path: build/_deps
+          key: fetchcontent-macos-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/zstd-install"
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Upload sc2fla binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: sc2fla-macos-${{ runner.arch }}
+          path: build/sc2fla
+          if-no-files-found: error
