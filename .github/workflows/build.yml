@@ -16,6 +16,8 @@ permissions:
 
 env:
   ZSTD_VERSION: v1.5.7
+  # Must match the flatbuffers tag pinned in Workshop-Core (cmake/WkFlatbuffers.cmake)
+  FLATBUFFERS_VERSION: v25.12.19
   ZSTD_OSX_ARCHITECTURES: "x86_64;x86_64h;arm64"
   ZSTD_OSX_DEPLOYMENT_TARGET: "15.0"
   HOMEBREW_NO_AUTO_UPDATE: "1"
@@ -41,6 +43,33 @@ jobs:
         shell: pwsh
         run: |
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install zstd:x64-windows-static
+
+      # Workshop-Core's MSVC code path runs `flatc` at configure time, so it
+      # must already be on PATH (otherwise Header_generated.h is never created).
+      - name: Cache flatc
+        id: flatc-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/flatc-bin
+          key: flatc-${{ env.FLATBUFFERS_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build flatc
+        if: steps.flatc-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:FLATBUFFERS_VERSION https://github.com/google/flatbuffers.git "$env:RUNNER_TEMP/flatbuffers-src"
+          cmake -S "$env:RUNNER_TEMP/flatbuffers-src" -B "$env:RUNNER_TEMP/flatbuffers-build" -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_FLATC=ON `
+            -DFLATBUFFERS_BUILD_TESTS=OFF -DFLATBUFFERS_INSTALL=OFF
+          cmake --build "$env:RUNNER_TEMP/flatbuffers-build" --target flatc
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/flatc-bin" | Out-Null
+          Copy-Item "$env:RUNNER_TEMP/flatbuffers-build/flatc.exe" "$env:RUNNER_TEMP/flatc-bin/"
+
+      - name: Add flatc to PATH
+        shell: pwsh
+        run: |
+          "$env:RUNNER_TEMP/flatc-bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & "$env:RUNNER_TEMP/flatc-bin/flatc.exe" --version
 
       - name: Cache CMake FetchContent dependencies
         uses: actions/cache@v6
