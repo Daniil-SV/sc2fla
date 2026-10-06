@@ -29,7 +29,7 @@ endif()
 
 FetchContent_Declare(
     supercell-flash
-    GIT_REPOSITORY https://github.com/sc-workshop/SupercellFlash.git
+    GIT_REPOSITORY https://github.com/fe4r-s/SupercellFlash.git
     GIT_TAG main
 )
 FetchContent_MakeAvailable(supercell-flash)
