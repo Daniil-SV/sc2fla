@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace sc2fla {
@@ -21,6 +22,7 @@ namespace sc2fla {
 
         std::unordered_map<uint32_t, std::vector<std::unique_ptr<Animate::Pic::Group>>> shapes_with_nine_slices;
         std::vector<uint32_t> movies_with_nine_slices;
+        std::unordered_set<uint32_t> mask_shapes;
 
         bool animated_clips_play = true;
         bool extend_single_frame_clips = false;

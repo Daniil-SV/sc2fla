@@ -68,7 +68,7 @@ namespace sc2fla {
         std::cout << "usage: sc2fla input [args]\n\n"
                      "args:\n"
                      "  -h,  --help            show this message\n"
-                     "  -g,  --group <name>    convert only matching exports (* wildcard)\n"
+                     "  -g,  --group <name>    convert only matching exports\n"
                      "  -t,  --texture <file>  use an external texture\n"
                      "  -o,  --output <dir>    output directory\n"
                      "  -x,  --xfl             write an unpacked .xfl folder\n"

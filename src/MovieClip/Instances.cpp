@@ -8,6 +8,7 @@
 #include "Animate/Pic/PicSymbol.h"
 #include "Animate/Pic/PicText.h"
 #include "MovieClip/ConvertMovieClip.h"
+#include "MovieClip/MaskBinds.h"
 #include "MovieClip/Playback.h"
 #include "Shape/NineSlice.h"
 
@@ -35,6 +36,8 @@ namespace sc2fla {
                                    const MovieClipRecord& movieclip,
                                    Animate::Library::DocumentPage& movie_page,
                                    MovieClipBuildState& state) {
+        const std::vector<char> mask_binds = FindMaskContentBinds(resources, movieclip);
+
         for (size_t i = 0; i < movieclip.binds.size(); ++i) {
             const MovieClipBind& bind = movieclip.binds[i];
             ResourceKind kind = resources.KindOf(bind.id);
@@ -56,7 +59,10 @@ namespace sc2fla {
                 }
 
                 spec.kind = BindInstanceSpec::Kind::ShapeSymbol;
-                spec.page = &project.GetSymbol("Shapes/Shape " + std::to_string(bind.id));
+                std::string shape_key = "Shapes/Shape " + std::to_string(bind.id);
+                if (mask_binds[i] && project.HasSymbol(shape_key + " Mask"))
+                    shape_key += " Mask";
+                spec.page = &project.GetSymbol(shape_key);
 
                 spec.force_graphic = bind.blend == BlendMode::None;
                 spec.blend = bind.blend;

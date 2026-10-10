@@ -23,4 +23,6 @@ namespace sc2fla {
     void AddColorfillLayers(Animate::Pic::Page& page, const std::vector<RgbaImage>& textures, const ShapeRecord& shape, const SolidPlan& plan);
 
     void AddFillLayer(Animate::Pic::Page& page, const std::vector<RgbaImage>& textures, const ShapeRecord& shape, const SolidPlan& plan);
+
+    void AddMaskFillLayer(Animate::Pic::Page& page, const std::vector<RgbaImage>& textures, const ShapeRecord& shape, const SolidPlan& plan);
 }

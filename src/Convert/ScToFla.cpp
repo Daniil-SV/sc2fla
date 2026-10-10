@@ -8,6 +8,7 @@
 #include "Core/Console.h"
 #include "Media/Texture.h"
 #include "MovieClip/ConvertMovieClip.h"
+#include "MovieClip/MaskBinds.h"
 #include "Shape/ConvertShape.h"
 
 #include <flash/objects/SWFTexture.h>
@@ -121,6 +122,19 @@ namespace sc2fla {
             return ids;
         }
 
+        void CollectMaskShapes(const ResourceTable& resources, const ResourceIds& ids, ConversionContext& ctx) {
+            for (auto& kv : ids) {
+                if (kv.second != ResourceKind::MovieClip)
+                    continue;
+                const MovieClipRecord& movieclip = resources.movieclips.at(kv.first);
+                const std::vector<char> in_mask = FindMaskContentBinds(resources, movieclip);
+                for (size_t i = 0; i < in_mask.size(); ++i) {
+                    if (in_mask[i] && resources.KindOf(movieclip.binds[i].id) == ResourceKind::Shape)
+                        ctx.mask_shapes.insert(movieclip.binds[i].id);
+                }
+            }
+        }
+
         const std::vector<std::string>* ExportNamesOf(const ResourceTable& resources, const GroupSelection& selection, bool group_active, uint32_t id) {
             if (group_active) {
                 auto matched = selection.matched_root_names.find(id);
@@ -136,6 +150,7 @@ namespace sc2fla {
 
         ctx.playable_length_cache.clear();
         ctx.plays_on_its_own_cache.clear();
+        ctx.mask_shapes.clear();
 
         sc::flash::SupercellSWF swf;
         LoadSwf(swf, input_path, options.external_texture.has_value());
@@ -171,6 +186,8 @@ namespace sc2fla {
                 ctx.movies_with_nine_slices.push_back(kv.first);
             }
         }
+
+        CollectMaskShapes(resources, ids, ctx);
 
         Console::Info("Converting SupercellFlash resources to Adobe Animate");
         for (auto& kv : ids) {

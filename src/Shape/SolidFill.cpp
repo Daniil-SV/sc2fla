@@ -41,6 +41,46 @@ namespace sc2fla {
             solid.fill_color = Animate::ColorAlpha {r, g, b, a};
             return solid;
         }
+
+        struct ComponentEdges {
+            std::string outer;
+            std::vector<std::string> extra_outers;
+            std::vector<std::string> holes;
+        };
+
+        ComponentEdges BuildComponentEdges(const ShapeRecord& shape, const SolidPlan& plan, const std::vector<size_t>& comp) {
+            ComponentEdges edges;
+            const ShapeBitmapCommand& representative = shape.bitmaps[comp.front()];
+
+            if (comp.size() == 1) {
+                edges.outer = LoopToEdgesXml(PerimeterOrderStartingAfterFirst(representative.xy_coords));
+                return edges;
+            }
+
+            std::vector<std::vector<Point2>> loops = TraceBoundary(plan.unique, comp);
+            if (loops.empty())
+                return edges;
+
+            ClassifiedLoops classified = ClassifyLoops(loops);
+            auto rotate_to_anchor = [&](std::vector<Point2>& loop) {
+                if (!plan.have_anchor || std::find(comp.begin(), comp.end(), plan.anchor) == comp.end())
+                    return;
+                const std::vector<Point2>& anchor_unique = plan.unique[plan.anchor];
+                if (!anchor_unique.empty())
+                    loop = RotateLoopToStartAt(loop, anchor_unique.back());
+            };
+            for (size_t li = 0; li < classified.outers.size(); ++li) {
+                std::vector<Point2> loop = classified.outers[li];
+                rotate_to_anchor(loop);
+                if (li == 0)
+                    edges.outer = LoopToEdgesXml(loop);
+                else
+                    edges.extra_outers.push_back(LoopToEdgesXml(loop));
+            }
+            for (auto& hole : classified.holes)
+                edges.holes.push_back(LoopToEdgesXml(hole));
+            return edges;
+        }
     }
 
     SolidPlan PlanSolidFills(const ShapeRecord& shape) {
@@ -127,49 +167,42 @@ namespace sc2fla {
         Animate::Pic::Frame& frame = layer.CreateFrame();
 
         for (const auto& comp : plan.components) {
-            std::string edges_str;
-            std::vector<std::string> extra_outer_edges;
-            std::vector<std::string> hole_edges;
             const ShapeBitmapCommand& representative = shape.bitmaps[comp.front()];
-
-            if (comp.size() == 1) {
-                edges_str = LoopToEdgesXml(PerimeterOrderStartingAfterFirst(representative.xy_coords));
-            } else {
-                std::vector<std::vector<Point2>> loops = TraceBoundary(plan.unique, comp);
-
-                if (!loops.empty()) {
-                    ClassifiedLoops classified = ClassifyLoops(loops);
-                    auto rotate_to_anchor = [&](std::vector<Point2>& loop) {
-                        if (!plan.have_anchor || std::find(comp.begin(), comp.end(), plan.anchor) == comp.end())
-                            return;
-                        const std::vector<Point2>& anchor_unique = plan.unique[plan.anchor];
-                        if (!anchor_unique.empty())
-                            loop = RotateLoopToStartAt(loop, anchor_unique.back());
-                    };
-                    for (size_t li = 0; li < classified.outers.size(); ++li) {
-                        std::vector<Point2> loop = classified.outers[li];
-                        rotate_to_anchor(loop);
-                        if (li == 0)
-                            edges_str = LoopToEdgesXml(loop);
-                        else
-                            extra_outer_edges.push_back(LoopToEdgesXml(loop));
-                    }
-                    for (auto& hole : classified.holes)
-                        hole_edges.push_back(LoopToEdgesXml(hole));
-                }
-            }
+            ComponentEdges edges = BuildComponentEdges(shape, plan, comp);
 
             Animate::Pic::Shape& color_fill = frame.AddFrameElement<Animate::Pic::Shape>();
 
             if (plan.components.size() > 1)
                 color_fill.ConvertToDrawingObject();
             Animate::Fill::SolidFillStyle solid = MakeSolidFill(textures, representative);
-            color_fill.CreateEdge(solid, edges_str);
-            for (const std::string& extra : extra_outer_edges)
+            color_fill.CreateEdge(solid, edges.outer);
+            for (const std::string& extra : edges.extra_outers)
                 color_fill.CreateEdge(solid, extra, false);
 
-            for (const std::string& hole : hole_edges)
+            for (const std::string& hole : edges.holes)
                 color_fill.CreateEdge(solid, hole, true);
+        }
+    }
+
+    void AddMaskFillLayer(Animate::Pic::Page& page, const std::vector<RgbaImage>& textures, const ShapeRecord& shape, const SolidPlan& plan) {
+        Animate::Pic::Layer& layer = page.AddNewLayer("Mask Fill", false, false);
+        Animate::Pic::Frame& frame = layer.CreateFrame();
+
+        Animate::Pic::Shape& mask_fill = frame.AddFrameElement<Animate::Pic::Shape>();
+        const size_t representative = plan.peels.empty() ? plan.components.front().front() : plan.peels.front();
+        Animate::Fill::SolidFillStyle solid = MakeSolidFill(textures, shape.bitmaps[representative]);
+
+        for (size_t idx : plan.peels)
+            mask_fill.CreateEdge(solid, LoopToEdgesXml(PerimeterOrder(plan.unique[idx])));
+
+        for (const auto& comp : plan.components) {
+            ComponentEdges edges = BuildComponentEdges(shape, plan, comp);
+            if (!edges.outer.empty())
+                mask_fill.CreateEdge(solid, edges.outer);
+            for (const std::string& extra : edges.extra_outers)
+                mask_fill.CreateEdge(solid, extra);
+            for (const std::string& hole : edges.holes)
+                mask_fill.CreateEdge(solid, hole, true);
         }
     }
 }
