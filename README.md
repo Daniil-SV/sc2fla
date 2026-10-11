@@ -19,3 +19,6 @@ It's Good As Paid.
 - CMake
 - Ninja
 - C++20 compiler
+### Credits
+Fears - Main Developer
+Baayz - Bug Hunter  
