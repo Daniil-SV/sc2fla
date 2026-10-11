@@ -42,8 +42,6 @@ int main(int argc, char** argv) {
         return 1;
 
     ConversionContext ctx;
-    ctx.extend_single_frame_clips = arguments.extend_frames;
-    ctx.animated_clips_play = !arguments.graphic_only;
 
     for (auto& file : files) {
         const fs::path out_dir = arguments.output.empty() ? file.parent_path() : fs::path(arguments.output);

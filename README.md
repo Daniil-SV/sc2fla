@@ -14,8 +14,6 @@ It's Good As Paid.
 | `-o`, `--output <dir>` | Output directory |
 | `-x`, `--xfl` | Write an unpacked *.xfl folder |
 | `-f`, `--fps <number>` | Set the frame rate |
-| `-e`, `--extend-frames` | Extended frames |
-| `-go`, `--graphic-only` | Graphic only |
 
 ### Requirements
 - CMake

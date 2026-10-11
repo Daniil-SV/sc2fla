@@ -30,10 +30,6 @@ namespace sc2fla {
                 result.groups.push_back(next("-g/--group"));
             else if (a == "-x" || a == "--xfl")
                 result.xfl = true;
-            else if (a == "-e" || a == "--extend-frames")
-                result.extend_frames = true;
-            else if (a == "-go" || a == "--graphic-only")
-                result.graphic_only = true;
             else if (a == "-f" || a == "--fps")
                 result.fps = next("-f/--fps");
             else if (!a.empty() && a[0] == '-')
@@ -72,8 +68,6 @@ namespace sc2fla {
                      "  -t,  --texture <file>  use an external texture\n"
                      "  -o,  --output <dir>    output directory\n"
                      "  -x,  --xfl             write an unpacked .xfl folder\n"
-                     "  -f,  --fps <number>    set the frame rate\n"
-                     "  -e,  --extend-frames   hold one-frame movieclips for their longest animated child\n"
-                     "  -go, --graphic-only    place every nested instance as a graphic symbol\n";
+                     "  -f,  --fps <number>    set the frame rate\n";
     }
 }

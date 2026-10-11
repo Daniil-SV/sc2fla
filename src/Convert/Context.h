@@ -24,8 +24,8 @@ namespace sc2fla {
         std::vector<uint32_t> movies_with_nine_slices;
         std::unordered_set<uint32_t> mask_shapes;
 
-        bool animated_clips_play = true;
-        bool extend_single_frame_clips = false;
+        bool animated_clips_play = false;
+        bool extend_single_frame_clips = true;
 
         std::unordered_map<uint32_t, bool> plays_on_its_own_cache;
         std::unordered_map<uint32_t, uint32_t> playable_length_cache;
