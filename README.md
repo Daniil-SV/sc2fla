@@ -15,10 +15,10 @@ It's Good As Paid.
 | `-x`, `--xfl` | Write an unpacked *.xfl folder |
 | `-f`, `--fps <number>` | Set the frame rate |
 
-### Requirements
+## Requirements
 - CMake
 - Ninja
 - C++20 compiler
-### Credits
+## Credits
 - Fears - Main Developer
 - Baayz - Bug Hunter  
