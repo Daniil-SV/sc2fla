@@ -16,7 +16,6 @@ permissions:
 
 env:
   ZSTD_VERSION: v1.5.7
-  # Must match the flatbuffers tag pinned in Workshop-Core (cmake/WkFlatbuffers.cmake)
   FLATBUFFERS_VERSION: v25.12.19
   ZSTD_OSX_ARCHITECTURES: "x86_64;x86_64h;arm64"
   ZSTD_OSX_DEPLOYMENT_TARGET: "15.0"
@@ -24,7 +23,6 @@ env:
   HOMEBREW_NO_INSTALL_CLEANUP: "1"
 
 jobs:
-  # ---------------------------------------------------------------- Windows
   windows:
     name: Windows
     runs-on: windows-latest
@@ -44,8 +42,6 @@ jobs:
         run: |
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install zstd:x64-windows-static
 
-      # Workshop-Core's MSVC code path runs `flatc` at configure time, so it
-      # must already be on PATH (otherwise Header_generated.h is never created).
       - name: Cache flatc
         id: flatc-cache
         uses: actions/cache@v6
@@ -89,20 +85,13 @@ jobs:
       - name: Build
         run: cmake --build build -j
 
-      - name: Package
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path build/sc2fla.exe, README.md -DestinationPath dist/sc2fla-windows-x64.zip
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: sc2fla-windows-x64
-          path: dist/sc2fla-windows-x64.zip
+          path: build/sc2fla.exe
           if-no-files-found: error
 
-  # ----------------------------------------------------------------- Ubuntu
   ubuntu:
     name: Ubuntu
     runs-on: ubuntu-latest
@@ -140,19 +129,13 @@ jobs:
       - name: Build
         run: cmake --build build -j
 
-      - name: Package
-        run: |
-          mkdir -p dist
-          tar -czf dist/sc2fla-linux-x64.tar.gz -C build sc2fla
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: sc2fla-linux-x64
-          path: dist/sc2fla-linux-x64.tar.gz
+          path: build/sc2fla
           if-no-files-found: error
 
-  # ------------------------------------------------------------------ macOS
   macos:
     name: macOS
     runs-on: macos-latest
@@ -206,19 +189,13 @@ jobs:
       - name: Build
         run: cmake --build build -j
 
-      - name: Package
-        run: |
-          mkdir -p dist
-          tar -czf "dist/sc2fla-macos-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}.tar.gz" -C build sc2fla
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: sc2fla-macos-${{ runner.arch }}
-          path: dist/*.tar.gz
+          name: sc2fla-macos-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+          path: build/sc2fla
           if-no-files-found: error
 
-  # ---------------------------------------------------------------- Release
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -242,7 +219,13 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           mkdir release
-          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release/ \;
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            for f in "$dir"*; do
+              case "$f" in *.exe) ext=".exe" ;; *) ext="" ;; esac
+              cp "$f" "release/${name}${ext}"
+            done
+          done
           (cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
