@@ -19,5 +19,3 @@ It's Good As Paid.
 - CMake
 - Ninja
 - C++20 compiler
-- zstd
-- Python 3
