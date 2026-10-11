@@ -20,5 +20,5 @@ It's Good As Paid.
 - Ninja
 - C++20 compiler
 ### Credits
-Fears - Main Developer
-Baayz - Bug Hunter  
+- Fears - Main Developer
+- Baayz - Bug Hunter  
