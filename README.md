@@ -21,4 +21,5 @@ It's Good As Paid.
 - C++20 compiler
 ## Credits
 - Fears - Main Developer
-- Baayz - Bug Hunter  
+- Baayz - Bug Hunter
+- Sc-Workshop - MIT license
